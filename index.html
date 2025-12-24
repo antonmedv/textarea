@@ -107,4 +107,22 @@
       timer = setTimeout(() => fn(...args), ms)
     }
   }
+
+  function saveToDisk() {
+    const blob = new Blob([article.textContent], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'mytext.txt'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  addEventListener('keydown', (e) => {
+    const ctrl_s = (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 's'
+    if (ctrl_s) {
+      e.preventDefault()
+      saveToDisk()
+    }
+  })
 </script>
