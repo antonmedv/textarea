@@ -168,8 +168,15 @@
       transition: opacity 0.15s ease;
     }
 
-    .note-item:hover .note-actions {
+    .note-item:hover .note-actions,
+    .note-item.active .note-actions {
       opacity: 1;
+    }
+
+    @media (max-width: 768px) {
+      .note-actions {
+        opacity: 1;
+      }
     }
 
     .note-action-btn {
@@ -377,13 +384,30 @@
         border-left: 1px solid var(--border);
       }
 
+      .toggle-sidebar svg {
+        transform: rotate(180deg);
+      }
+
       .sidebar.open ~ .toggle-sidebar {
         left: var(--sidebar-width);
         border-left: none;
       }
 
+      .sidebar.open ~ .toggle-sidebar svg {
+        transform: rotate(0deg);
+      }
+
       article {
         padding: 18px;
+        padding-left: 48px;
+      }
+
+      .sidebar.open ~ .main {
+        margin-left: var(--sidebar-width);
+      }
+
+      .sidebar.open ~ .main article {
+        padding-left: 18px;
       }
     }
   </style>
@@ -454,6 +478,7 @@
     let notes = []
     let currentNoteId = null
     let renameNoteId = null
+
     document.addEventListener('DOMContentLoaded', init)
 
     async function init() {
@@ -709,6 +734,7 @@
           article.focus()
           return
         }
+        
         await setContent(hash)
         
         const note = createNote('Imported Note', true)
@@ -723,6 +749,7 @@
       } catch (e) {
         article.textContent = ''
         article.removeAttribute('style')
+		article.focus()
       }
     }
 
@@ -732,11 +759,9 @@
         sidebar.classList.toggle('open')
       } else {
         sidebar.classList.toggle('collapsed')
+        const icon = toggleBtn.querySelector('svg')
+        icon.style.transform = sidebar.classList.contains('collapsed') ? 'rotate(180deg)' : ''
       }
-      
-      const icon = toggleBtn.querySelector('svg')
-      const isHidden = sidebar.classList.contains('collapsed') || (!sidebar.classList.contains('open') && isMobile)
-      icon.style.transform = isHidden ? 'rotate(180deg)' : ''
     })
 
     newNoteBtn.addEventListener('click', () => {
