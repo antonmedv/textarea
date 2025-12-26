@@ -36,6 +36,11 @@
 </style>
 <article contenteditable="plaintext-only" spellcheck></article>
 <script>
+  // attempt to register service worker
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/cache-worker.js");
+  }
+
   const article = document.querySelector('article')
   article.addEventListener('input', debounce(500, save))
   addEventListener('DOMContentLoaded', load)
