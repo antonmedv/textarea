@@ -8,18 +8,15 @@
     padding: 0;
     box-sizing: border-box;
   }
-
   html {
     color-scheme: light dark;
     background-color: #fff;
     color: #161616;
-
     @media (prefers-color-scheme: dark) {
       background-color: #000;
       color: #fff;
     }
   }
-
   article {
     outline: none;
     padding: 18px max(18px, calc(50vw - 400px));
@@ -80,6 +77,31 @@
     document.title = match?.[1] ?? 'Textarea'
   }
 
+  // Base64 URL encoding with fallback for older browsers
+  function toBase64URL(uint8Array) {
+    if (uint8Array.toBase64) {
+      return uint8Array.toBase64({ alphabet: 'base64url' })
+    }
+    let binary = ''
+    for (let i = 0; i < uint8Array.length; i++) {
+      binary += String.fromCharCode(uint8Array[i])
+    }
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  }
+
+  function fromBase64URL(b64) {
+    if (Uint8Array.fromBase64) {
+      return Uint8Array.fromBase64(b64, { alphabet: 'base64url' })
+    }
+    const padded = b64.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - b64.length % 4) % 4)
+    const binary = atob(padded)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i)
+    }
+    return bytes
+  }
+
   async function compress(string) {
     const byteArray = new TextEncoder().encode(string)
     const stream = new CompressionStream('deflate-raw')
@@ -87,11 +109,11 @@
     writer.write(byteArray)
     writer.close()
     const buffer = await new Response(stream.readable).arrayBuffer()
-    return new Uint8Array(buffer).toBase64().replace(/\+/g, "-").replace(/\//g, "_")
+    return toBase64URL(new Uint8Array(buffer))
   }
 
   async function decompress(b64) {
-    const byteArray = Uint8Array.fromBase64(b64.replace(/-/g, "+").replace(/_/g, "/"))
+    const byteArray = fromBase64URL(b64)
     const stream = new DecompressionStream('deflate-raw')
     const writer = stream.writable.getWriter()
     writer.write(byteArray)
@@ -107,4 +129,27 @@
       timer = setTimeout(() => fn(...args), ms)
     }
   }
+
+  function saveToDisk() {
+    const now = new Date()
+    const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-')
+
+    const match = article.textContent.match(/^#\s*(.+)/m)
+    const title = match?.[1].trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').slice(0, 30) || 'note'
+
+    const blob = new Blob([article.textContent], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${title}-${timestamp}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 's') {
+      e.preventDefault()
+      saveToDisk()
+    }
+  })
 </script>
