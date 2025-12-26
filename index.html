@@ -36,15 +36,17 @@
 </style>
 <article contenteditable="plaintext-only" spellcheck></article>
 <script>
-  const article = document.querySelector('article')
-  article.addEventListener('input', debounce(500, save))
+  const debouncedSave = debounce(500, save)
 
-  const styleObserver = new MutationObserver(debounce(500, save))
-  styleObserver.observe(article, {attributes: true, attributeFilter: ['style']})
+  const article = document.querySelector('article')
+  article.addEventListener('input', debouncedSave)
 
   addEventListener('DOMContentLoaded', load)
   addEventListener('hashchange', load)
 
+  const styleObserver = new MutationObserver(debouncedSave)
+
+  let observerStarted = false;
   async function load() {
     try {
       if (location.hash !== '') await set(location.hash)
@@ -59,6 +61,11 @@
       article.focus()
     }
     updateTitle()
+
+    if (!observerStarted) {
+      observerStarted = true
+      styleObserver.observe(article, { attributes: true, attributeFilter: ['style'] })
+    }
   }
 
   async function save() {
