@@ -1,6 +1,8 @@
-# Markdown Editor
+# [Markdown Editor](https://danielcregg.github.io/markdownarea/)
 
 A _minimalist_ markdown editor that lives entirely in your browser with real-time rendering and URL-based sharing.
+
+**Try it now:** https://danielcregg.github.io/markdownarea/
 
 ## Features
 
@@ -10,6 +12,7 @@ A _minimalist_ markdown editor that lives entirely in your browser with real-tim
   - **Edit** - Focus on writing
   - **Preview** - See the fully rendered document
   - **Split** - Edit and preview side-by-side
+- 📤 **Easy Sharing** - One-click share button uses native mobile sharing or copies URL to clipboard
 - 🗜️ **Compression magic** - Your markdown gets compressed with deflate for efficient URL storage
 - 🔗 **URL-based sharing** - Share your rendered documents by copying the URL
 - 🌓 **Dark mode** - Respects your system's color scheme preference
@@ -20,11 +23,13 @@ A _minimalist_ markdown editor that lives entirely in your browser with real-tim
 
 ## How to use
 
-1. Open the editor
+1. Open the editor at https://danielcregg.github.io/markdownarea/
 2. Write your markdown in the editor pane
 3. Click **Split** to see live preview alongside your text
 4. Click **Preview** to see only the rendered output
-5. Share your document by copying the URL
+5. Click the **📤 Share** button to share your document instantly
+   - On mobile: Opens native share sheet for easy sharing via apps
+   - On desktop: Copies the URL to your clipboard automatically
 6. Recipients see the exact same rendered content when they open the link
 
 ## Markdown Support
@@ -45,10 +50,10 @@ Full support for:
 ## Pro tips
 
 - Start your document with `# Title` to set a custom page title
+- Use the **📤 Share** button for instant sharing - no need to manually copy URLs
 - Use **Tab** key in the editor to insert spaces (instead of losing focus)
 - Your preferred view mode (Edit/Split/Preview) is remembered
 - Data lives in both localStorage AND the URL for maximum reliability
-- Share documents by simply copying and pasting the URL
 
 ## Examples
 
