@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Textarea</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --sidebar-width: 260px;
+      --bg: #fafafa;
+      --bg-sidebar: #f0f0f0;
+      --bg-hover: #e4e4e4;
+      --bg-active: #d8d8d8;
+      --text: #1a1a1a;
+      --text-muted: #666;
+      --border: #ddd;
+      --accent: #0066cc;
+      --accent-hover: #0052a3;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d0d0d;
+        --bg-sidebar: #141414;
+        --bg-hover: #1f1f1f;
+        --bg-active: #292929;
+        --text: #e8e8e8;
+        --text-muted: #888;
+        --border: #2a2a2a;
+        --accent: #4d9fff;
+        --accent-hover: #6fb3ff;
+      }
+    }
+
+    html {
+      background-color: var(--bg);
+      color: var(--text);
+    }
+
+    body {
+      display: flex;
+      min-height: 100vh;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    }
+
+    .sidebar {
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-width);
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      position: fixed;
+      left: 0;
+      top: 0;
+      transform: translateX(0);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 100;
+    }
+
+    .sidebar.collapsed {
+      transform: translateX(calc(-1 * var(--sidebar-width)));
+    }
+
+    .sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .sidebar-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn:hover {
+      background: var(--bg-hover);
+      border-color: var(--text-muted);
+    }
+
+    .btn-icon {
+      padding: 6px 8px;
+    }
+
+    .notes-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .note-item {
+      padding: 10px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 2px;
+    }
+
+    .note-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .note-item.active {
+      background: var(--bg-active);
+    }
+
+    .note-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .note-name {
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .note-preview {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .note-actions {
+      display: flex;
+      gap: 2px;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    .note-item:hover .note-actions {
+      opacity: 1;
+    }
+
+    .note-action-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 4px;
+      cursor: pointer;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+
+    .note-action-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+
+    .note-action-btn.delete:hover {
+      color: #e55;
+    }
+
+    .toggle-sidebar {
+      position: fixed;
+      left: var(--sidebar-width);
+      top: 16px;
+      z-index: 101;
+      background: var(--bg-sidebar);
+      border: 1px solid var(--border);
+      border-left: none;
+      border-radius: 0 6px 6px 0;
+      padding: 8px 6px;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      color: var(--text-muted);
+    }
+
+    .toggle-sidebar:hover {
+      background: var(--bg-hover);
+      color: var(--text);
+    }
+
+    .sidebar.collapsed ~ .toggle-sidebar {
+      left: 0;
+      border-left: 1px solid var(--border);
+      border-radius: 0 6px 6px 0;
+    }
+
+    .main {
+      flex: 1;
+      margin-left: var(--sidebar-width);
+      transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      min-height: 100vh;
+    }
+
+    .sidebar.collapsed ~ .main {
+      margin-left: 0;
+    }
+
+    article {
+      outline: none;
+      padding: 18px max(18px, calc(50vw - 400px - var(--sidebar-width) / 2));
+      width: 100%;
+      min-height: 100vh;
+      font: 18px / 1.6 'IBM Plex Mono', monospace;
+      tab-size: 4;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      white-space: pre-wrap;
+      text-wrap-style: pretty;
+      overflow-wrap: break-word;
+    }
+
+    .sidebar.collapsed ~ .main article {
+      padding: 18px max(18px, calc(50vw - 400px));
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.2s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      width: 90%;
+      max-width: 360px;
+      transform: scale(0.95);
+      transition: transform 0.2s ease;
+    }
+
+    .modal-overlay.active .modal {
+      transform: scale(1);
+    }
+
+    .modal-title {
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+
+    .modal input {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-family: inherit;
+      background: var(--bg-sidebar);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    .modal input:focus {
+      border-color: var(--accent);
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .empty-state svg {
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    .empty-state p {
+      font-size: 13px;
+    }
+
+    .notes-list::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .notes-list::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .notes-list::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    .notes-list::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        transform: translateX(calc(-1 * var(--sidebar-width)));
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .main {
+        margin-left: 0;
+      }
+
+      .toggle-sidebar {
+        left: 0;
+        border-left: 1px solid var(--border);
+      }
+
+      .sidebar.open ~ .toggle-sidebar {
+        left: var(--sidebar-width);
+        border-left: none;
+      }
+
+      article {
+        padding: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Notes</span>
+      <button class="btn btn-icon" id="newNoteBtn" title="New note">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </button>
+    </div>
+    <div class="notes-list" id="notesList"></div>
+  </aside>
+
+  <button class="toggle-sidebar" id="toggleSidebar" title="Toggle sidebar">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="15 18 9 12 15 6"></polyline>
+    </svg>
+  </button>
+
+  <main class="main">
+    <article contenteditable="plaintext-only" spellcheck id="article"></article>
+  </main>
+
+  <!-- New Note Modal -->
+  <div class="modal-overlay" id="newNoteModal">
+    <div class="modal">
+      <div class="modal-title">New Note</div>
+      <input type="text" id="newNoteName" placeholder="Enter note name..." autocomplete="off">
+      <div class="modal-actions">
+        <button class="btn" id="cancelNewNote">Cancel</button>
+        <button class="btn btn-primary" id="confirmNewNote">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rename Modal -->
+  <div class="modal-overlay" id="renameModal">
+    <div class="modal">
+      <div class="modal-title">Rename Note</div>
+      <input type="text" id="renameInput" placeholder="Enter new name..." autocomplete="off">
+      <div class="modal-actions">
+        <button class="btn" id="cancelRename">Cancel</button>
+        <button class="btn btn-primary" id="confirmRename">Rename</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const article = document.getElementById('article')
+    const sidebar = document.getElementById('sidebar')
+    const toggleBtn = document.getElementById('toggleSidebar')
+    const notesList = document.getElementById('notesList')
+    const newNoteBtn = document.getElementById('newNoteBtn')
+    const newNoteModal = document.getElementById('newNoteModal')
+    const newNoteName = document.getElementById('newNoteName')
+    const cancelNewNote = document.getElementById('cancelNewNote')
+    const confirmNewNote = document.getElementById('confirmNewNote')
+    const renameModal = document.getElementById('renameModal')
+    const renameInput = document.getElementById('renameInput')
+    const cancelRename = document.getElementById('cancelRename')
+    const confirmRename = document.getElementById('confirmRename')
+
+    let notes = []
+    let currentNoteId = null
+    let renameNoteId = null
+    document.addEventListener('DOMContentLoaded', init)
+
+    async function init() {
+      loadNotes()
+      
+      if (location.hash && location.hash.length > 1) {
+        await loadFromHash()
+      } else if (notes.length > 0) {
+        const lastActiveId = localStorage.getItem('lastActiveNote')
+        const noteToLoad = notes.find(n => n.id === lastActiveId) || notes[0]
+        selectNote(noteToLoad.id)
+      } else {
+        createNote('Untitled', true)
+      }
+      
+      renderNotesList()
+    }
+
+    function loadNotes() {
+      try {
+        notes = JSON.parse(localStorage.getItem('notes') || '[]')
+      } catch (e) {
+        notes = []
+      }
+    }
+
+    function saveNotes() {
+      try {
+        localStorage.setItem('notes', JSON.stringify(notes))
+      } catch (e) {}
+    }
+
+    function createNote(name, silent = false) {
+      const id = 'note_' + Date.now()
+      const note = {
+        id,
+        name: name || 'Untitled',
+        hash: '',
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }
+      notes.unshift(note)
+      saveNotes()
+      if (!silent) {
+        renderNotesList()
+        selectNote(id)
+      }
+      return note
+    }
+
+    function deleteNote(id) {
+      if (notes.length <= 1) {
+        alert('Cannot delete the last note')
+        return
+      }
+      
+      const index = notes.findIndex(n => n.id === id)
+      if (index === -1) return
+      
+      notes.splice(index, 1)
+      saveNotes()
+      
+      if (currentNoteId === id) {
+        selectNote(notes[0].id)
+      }
+      
+      renderNotesList()
+    }
+
+    function renameNote(id, newName) {
+      const note = notes.find(n => n.id === id)
+      if (note) {
+        note.name = newName || 'Untitled'
+        note.updatedAt = Date.now()
+        saveNotes()
+        renderNotesList()
+        updateTitle()
+      }
+    }
+
+    async function selectNote(id) {
+      if (currentNoteId) {
+        await saveCurrentNote()
+      }
+      
+      currentNoteId = id
+      localStorage.setItem('lastActiveNote', id)
+      
+      const note = notes.find(n => n.id === id)
+      if (note && note.hash) {
+        try {
+          await setContent(note.hash)
+          history.replaceState({}, '', '#' + note.hash)
+        } catch (e) {
+          article.textContent = ''
+          article.removeAttribute('style')
+          history.replaceState({}, '', location.pathname)
+        }
+      } else {
+        article.textContent = ''
+        article.removeAttribute('style')
+        history.replaceState({}, '', location.pathname)
+      }
+      
+      renderNotesList()
+      updateTitle()
+      article.focus()
+    }
+
+    async function saveCurrentNote() {
+      if (!currentNoteId) return
+      
+      const note = notes.find(n => n.id === currentNoteId)
+      if (note) {
+        note.hash = await getHash()
+        note.updatedAt = Date.now()
+        saveNotes()
+        if (note.hash) {
+          history.replaceState({}, '', '#' + note.hash)
+        }
+      }
+    }
+
+    function renderNotesList() {
+      if (notes.length === 0) {
+        notesList.innerHTML = `
+          <div class="empty-state">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+            <p>No notes yet.<br>Click + to create one.</p>
+          </div>
+        `
+        return
+      }
+
+      notesList.innerHTML = notes.map(note => {
+        const isActive = note.id === currentNoteId
+        const preview = getPreview(note)
+        return `
+          <div class="note-item ${isActive ? 'active' : ''}" data-id="${note.id}">
+            <div class="note-info">
+              <div class="note-name">${escapeHtml(note.name)}</div>
+              <div class="note-preview">${escapeHtml(preview)}</div>
+            </div>
+            <div class="note-actions">
+              <button class="note-action-btn rename" data-id="${note.id}" title="Rename">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
+              <button class="note-action-btn share" data-id="${note.id}" title="Copy share link">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="18" cy="5" r="3"></circle>
+                  <circle cx="6" cy="12" r="3"></circle>
+                  <circle cx="18" cy="19" r="3"></circle>
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                </svg>
+              </button>
+              <button class="note-action-btn delete" data-id="${note.id}" title="Delete">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        `
+      }).join('')
+
+      notesList.querySelectorAll('.note-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+          if (!e.target.closest('.note-action-btn')) {
+            selectNote(item.dataset.id)
+          }
+        })
+      })
+
+      notesList.querySelectorAll('.note-action-btn.delete').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation()
+          if (confirm('Delete this note?')) {
+            deleteNote(btn.dataset.id)
+          }
+        })
+      })
+
+      notesList.querySelectorAll('.note-action-btn.rename').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation()
+          openRenameModal(btn.dataset.id)
+        })
+      })
+
+      notesList.querySelectorAll('.note-action-btn.share').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation()
+          await shareNote(btn.dataset.id)
+        })
+      })
+    }
+
+    function getPreview(note) {
+      if (!note.hash) return 'Empty note'
+      const date = new Date(note.updatedAt)
+      return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div')
+      div.textContent = text
+      return div.innerHTML
+    }
+
+    async function shareNote(id) {
+      const note = notes.find(n => n.id === id)
+      if (!note) return
+      
+      if (id === currentNoteId) {
+        await saveCurrentNote()
+      }
+      
+      if (!note.hash) {
+        alert('Cannot share empty note')
+        return
+      }
+      
+      const url = location.origin + location.pathname + '#' + note.hash
+      try {
+        await navigator.clipboard.writeText(url)
+        alert('Share link copied to clipboard!')
+      } catch (e) {
+        prompt('Copy this link:', url)
+      }
+    }
+
+    async function loadFromHash() {
+      try {
+        const hash = location.hash.slice(1)
+        
+        const existingNote = notes.find(n => n.hash === hash)
+        if (existingNote) {
+          currentNoteId = existingNote.id
+          localStorage.setItem('lastActiveNote', existingNote.id)
+          await setContent(hash)
+          renderNotesList()
+          updateTitle()
+          article.focus()
+          return
+        }
+        await setContent(hash)
+        
+        const note = createNote('Imported Note', true)
+        note.hash = hash
+        saveNotes()
+        currentNoteId = note.id
+        localStorage.setItem('lastActiveNote', note.id)
+        
+        renderNotesList()
+        updateTitle()
+        article.focus()
+      } catch (e) {
+        article.textContent = ''
+        article.removeAttribute('style')
+      }
+    }
+
+    toggleBtn.addEventListener('click', () => {
+      const isMobile = window.innerWidth <= 768
+      if (isMobile) {
+        sidebar.classList.toggle('open')
+      } else {
+        sidebar.classList.toggle('collapsed')
+      }
+      
+      const icon = toggleBtn.querySelector('svg')
+      const isHidden = sidebar.classList.contains('collapsed') || (!sidebar.classList.contains('open') && isMobile)
+      icon.style.transform = isHidden ? 'rotate(180deg)' : ''
+    })
+
+    newNoteBtn.addEventListener('click', () => {
+      newNoteModal.classList.add('active')
+      newNoteName.value = ''
+      newNoteName.focus()
+    })
+
+    cancelNewNote.addEventListener('click', () => {
+      newNoteModal.classList.remove('active')
+    })
+
+    confirmNewNote.addEventListener('click', () => {
+      const name = newNoteName.value.trim() || 'Untitled'
+      createNote(name)
+      newNoteModal.classList.remove('active')
+    })
+
+    newNoteName.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        confirmNewNote.click()
+      } else if (e.key === 'Escape') {
+        cancelNewNote.click()
+      }
+    })
+
+    newNoteModal.addEventListener('click', (e) => {
+      if (e.target === newNoteModal) {
+        newNoteModal.classList.remove('active')
+      }
+    })
+
+    function openRenameModal(id) {
+      renameNoteId = id
+      const note = notes.find(n => n.id === id)
+      if (note) {
+        renameInput.value = note.name
+        renameModal.classList.add('active')
+        renameInput.focus()
+        renameInput.select()
+      }
+    }
+
+    cancelRename.addEventListener('click', () => {
+      renameModal.classList.remove('active')
+      renameNoteId = null
+    })
+
+    confirmRename.addEventListener('click', () => {
+      if (renameNoteId) {
+        renameNote(renameNoteId, renameInput.value.trim())
+      }
+      renameModal.classList.remove('active')
+      renameNoteId = null
+    })
+
+    renameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        confirmRename.click()
+      } else if (e.key === 'Escape') {
+        cancelRename.click()
+      }
+    })
+
+    renameModal.addEventListener('click', (e) => {
+      if (e.target === renameModal) {
+        renameModal.classList.remove('active')
+        renameNoteId = null
+      }
+    })
+
+    article.addEventListener('input', debounce(500, async () => {
+      await saveCurrentNote()
+      renderNotesList()
+      updateTitle()
+    }))
+
+    async function setContent(hash) {
+      const [content, style] = (await decompress(hash)).split('\x00')
+      article.textContent = content
+      if (style) article.setAttribute('style', style)
+      else article.removeAttribute('style')
+    }
+
+    async function getHash() {
+      const style = article.getAttribute('style')
+      const content = article.textContent + (style !== null ? '\x00' + style : '')
+      return await compress(content)
+    }
+
+    function updateTitle() {
+      const note = notes.find(n => n.id === currentNoteId)
+      const noteName = note?.name || 'Textarea'
+      const match = article.textContent.match(/^\n*#(.+)\n/)
+      document.title = match?.[1] || noteName
+    }
+
+    function toBase64URL(uint8Array) {
+      if (uint8Array.toBase64) {
+        return uint8Array.toBase64({ alphabet: 'base64url' })
+      }
+      let binary = ''
+      for (let i = 0; i < uint8Array.length; i++) {
+        binary += String.fromCharCode(uint8Array[i])
+      }
+      return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    }
+
+    function fromBase64URL(b64) {
+      if (Uint8Array.fromBase64) {
+        return Uint8Array.fromBase64(b64, { alphabet: 'base64url' })
+      }
+      const padded = b64.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - b64.length % 4) % 4)
+      const binary = atob(padded)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i)
+      }
+      return bytes
+    }
+
+    async function compress(string) {
+      const byteArray = new TextEncoder().encode(string)
+      const stream = new CompressionStream('deflate-raw')
+      const writer = stream.writable.getWriter()
+      writer.write(byteArray)
+      writer.close()
+      const buffer = await new Response(stream.readable).arrayBuffer()
+      return toBase64URL(new Uint8Array(buffer))
+    }
+
+    async function decompress(b64) {
+      const byteArray = fromBase64URL(b64)
+      const stream = new DecompressionStream('deflate-raw')
+      const writer = stream.writable.getWriter()
+      writer.write(byteArray)
+      writer.close()
+      const buffer = await new Response(stream.readable).arrayBuffer()
+      return new TextDecoder().decode(buffer)
+    }
+
+    function debounce(ms, fn) {
+      let timer
+      return (...args) => {
+        clearTimeout(timer)
+        timer = setTimeout(() => fn(...args), ms)
+      }
+    }
+
+    function saveToDisk() {
+      const now = new Date()
+      const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '-')
+      const note = notes.find(n => n.id === currentNoteId)
+      const title = note?.name.replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').slice(0, 30) || 'note'
+
+      const blob = new Blob([article.textContent], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${title}-${timestamp}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+
+    addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 's') {
+        e.preventDefault()
+        saveToDisk()
+      }
+    })
+
+    addEventListener('hashchange', async () => {
+      if (location.hash && location.hash.length > 1) {
+        await loadFromHash()
+      }
+    })
+  </script>
+</body>
+</html>
