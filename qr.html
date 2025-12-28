@@ -69,7 +69,9 @@
 <script>
   function render() {
     const hash = location.hash
-    const url = 'https://textarea.my/' + hash
+    // Build URL dynamically based on current origin
+    const basePath = location.pathname.replace(/\/qr\/?$/, '/')
+    const url = location.origin + basePath + hash
     const link = document.getElementById('link')
     link.href = '/' + hash
 
