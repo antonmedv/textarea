@@ -1,0 +1,8 @@
+version: "3.8"
+services:
+  textarea:
+    build: .
+    image: derdg1/textarea:portainer
+    ports:
+      - "8080:80"
+    restart: unless-stopped
