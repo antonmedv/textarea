@@ -65,9 +65,9 @@
 <script>
   function render() {
     const hash = location.hash
-    const url = 'https://textarea.my/' + hash
+    const url = location.origin + location.pathname.replace(/[^/]*$/,'') + hash
     const link = document.getElementById('link')
-    link.href = '/' + hash
+    link.href = location.pathname.replace(/[^/]*$/,'') + hash
 
     const typeNumber = 0
     const errorCorrectionLevel = 'L'
