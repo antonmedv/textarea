@@ -374,8 +374,8 @@
   }
 
   function updateTitle() {
-    const match = article.textContent.match(/^\n*#(.+)\n/)
-    document.title = match?.[1] ?? 'Textarea'
+    const match = article.textContent.match(/^#\s*(.+)/m)
+    document.title = match?.[1]?.trim() ?? 'Textarea'
   }
 
   async function compress(string) {
