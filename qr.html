@@ -1512,7 +1512,7 @@
     }
 
     const sanitizedHash = sanitizeHash(cleanHash)
-    const url = 'https://textarea.my/#' + sanitizedHash
+    const url = window.location.origin + '/#' + sanitizedHash
     const link = document.getElementById('link')
     link.href = '/#' + sanitizedHash
 
