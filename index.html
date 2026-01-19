@@ -228,6 +228,18 @@
     border-bottom-right-radius: 10px;
   }
 
+  .menu-separator {
+    height: 1px;
+    background-color: rgba(0, 0, 0, 0.15);
+    margin: 4px 0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .menu-separator {
+      background-color: rgba(255, 255, 255, 0.2);
+    }
+  }
+
   #notification {
     visibility: hidden;
     transform: translateY(-30px);
@@ -279,6 +291,7 @@
     </svg>
     New document
   </a>
+  <div class="menu-separator"></div>
   <a class="item" id="qr" href="/qr" role="menuitem">
     <svg aria-hidden="true" focusable="false" width="22" height="22">
       <use xlink:href="#icon-qrcode"></use>
@@ -287,22 +300,30 @@
   </a>
   <a class="item" id="share-link" href="" role="menuitem">
     <svg aria-hidden="true" focusable="false" width="22" height="22">
+      <use xlink:href="#icon-link"></use>
+    </svg>
+    Copy full link
+  </a>
+  <a class="item" id="short-link" href="" role="menuitem">
+    <svg aria-hidden="true" focusable="false" width="22" height="22">
       <use xlink:href="#icon-share"></use>
     </svg>
-    Share document
+    Copy short link
   </a>
+  <div class="menu-separator"></div>
   <a class="item" id="save-as-html" href="" role="menuitem">
     <svg aria-hidden="true" focusable="false" width="22" height="22">
-      <use xlink:href="#icon-empty"></use>
+      <use xlink:href="#icon-code"></use>
     </svg>
     Save as HTML
   </a>
   <a class="item" id="save-as-text" href="" role="menuitem">
     <svg aria-hidden="true" focusable="false" width="22" height="22">
-      <use xlink:href="#icon-empty"></use>
+      <use xlink:href="#icon-file-text"></use>
     </svg>
     Save as TEXT
   </a>
+  <div class="menu-separator"></div>
   <a class="item" href="https://github.com/antonmedv/textarea" target="_blank" role="menuitem">
     <svg aria-hidden="true" focusable="false" width="22" height="22">
       <use xlink:href="#icon-github"></use>
@@ -547,11 +568,20 @@
     article.normalize()
   }
 
+  async function createShortUrl(url) {
+    const proxyUrl = 'https://corsproxy.io/?'
+    const isGdUrl = `https://is.gd/create.php?format=simple&url=${encodeURIComponent(url)}`
+    const response = await fetch(proxyUrl + encodeURIComponent(isGdUrl))
+    if (!response.ok) throw new Error('Shortening failed')
+    return (await response.text()).trim()
+  }
+
   function initUI() {
     const menu = document.querySelector('#menu')
     const button = document.querySelector('#button')
     const qr = document.querySelector('#qr')
     const shareLink = document.querySelector('#share-link')
+    const shortLink = document.querySelector('#short-link')
     const saveAsHTML = document.querySelector('#save-as-html')
     const saveAsText = document.querySelector('#save-as-text')
 
@@ -589,6 +619,24 @@
       }
       navigator.clipboard.writeText(location.href)
       notify('Link copied')
+      hideMenu()
+    })
+
+    shortLink.addEventListener('click', async event => {
+      event.preventDefault()
+      if (!navigator.clipboard) {
+        alert('Your browser does not support clipboard API')
+        return
+      }
+      
+      try {
+        const shortUrl = await createShortUrl(location.href)
+        await navigator.clipboard.writeText(shortUrl)
+        notify('Short link copied')
+      } catch (error) {
+        navigator.clipboard.writeText(location.href)
+        notify('Link copied')
+      }
       hideMenu()
     })
     saveAsHTML.addEventListener('click', event => {
@@ -932,6 +980,29 @@
     <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
     <path
       d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"/>
+  </symbol>
+  <symbol id="icon-link" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+    <path d="M9 15l6 -6"/>
+    <path d="M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464"/>
+    <path d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463"/>
+  </symbol>
+  <symbol id="icon-code" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+    <path d="M7 8l-4 4l4 4"/>
+    <path d="M17 8l4 4l-4 4"/>
+    <path d="M14 4l-4 16"/>
+  </symbol>
+  <symbol id="icon-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+    <path d="M14 3v4a1 1 0 0 0 1 1h4"/>
+    <path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z"/>
+    <path d="M9 9l1 0"/>
+    <path d="M9 13l6 0"/>
+    <path d="M9 17l6 0"/>
   </symbol>
   <symbol id="icon-empty" viewBox="0 0 24 24"></symbol>
 </svg>
