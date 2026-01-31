@@ -819,6 +819,32 @@
     const frag = document.createDocumentFragment()
     const codeBlockPlaceholders = [] // Track code blocks for async loading
 
+    let cursorPos = null
+    try {
+      const sel = window.getSelection()
+      if (sel.rangeCount > 0) {
+        let offset = 0
+        const walk = (node) => {
+          if (node === sel.anchorNode) {
+            offset += sel.anchorOffset
+            return true
+          }
+          if (node.nodeType === Node.TEXT_NODE) {
+            offset += node.textContent.length
+          } else if (node.classList?.contains('code-editor') || node.classList?.contains('code-editor-placeholder')) {
+            offset += (node.dataset.raw || '').length
+          } else if (node.childNodes) {
+            for (const child of node.childNodes) {
+              if (walk(child)) return true
+            }
+          }
+          return false
+        }
+        walk(article)
+        cursorPos = offset
+      }
+    } catch (e) {}
+
     const matchers = [
       {name: 'md-codeblock', re: /```[^\n]*\n[\s\S]*?\n```/y},
       {name: 'md-codeblock', re: /~~~[^\n]*\n[\s\S]*?\n~~~/y},
@@ -861,7 +887,8 @@
             placeholder.dataset.raw = raw
             placeholder.style.cssText = 'min-height: 80px; background: #f6f8fa; border-radius: 8px; margin: 12px 0;'
             frag.appendChild(placeholder)
-            codeBlockPlaceholders.push({ placeholder, raw })
+            // Track start position for cursor focus
+            codeBlockPlaceholders.push({ placeholder, raw, startPos: i, endPos: i + raw.length })
           } else {
             const span = document.createElement('span')
             span.className = m.name
@@ -903,10 +930,32 @@
 
     if (codeBlockPlaceholders.length > 0) {
       loadCodeEditor().then(() => {
-        codeBlockPlaceholders.forEach(({ placeholder, raw }) => {
+        let focusedEditor = null
+        codeBlockPlaceholders.forEach(({ placeholder, raw, startPos, endPos }) => {
           if (placeholder.parentNode) {
             const editor = window.CodeEditor.create(raw, save)
             placeholder.parentNode.replaceChild(editor, placeholder)
+            
+            if (cursorPos !== null && cursorPos >= startPos && cursorPos <= endPos) {
+              focusedEditor = editor
+              const firstNewline = raw.indexOf('\n')
+              const codeStart = firstNewline + 1
+              const codeEnd = raw.length - 4 
+              const relativePos = cursorPos - startPos
+              
+              if (relativePos > codeStart && relativePos < raw.length) {
+                // Cursor is in the code body area
+                const textarea = editor.querySelector('.code-editor-textarea')
+                if (textarea) {
+                  const codeBody = raw.slice(codeStart, codeEnd).trim()
+                  const posInCode = Math.min(Math.max(0, relativePos - codeStart), codeBody.length)
+                  setTimeout(() => {
+                    textarea.focus()
+                    textarea.setSelectionRange(posInCode, posInCode)
+                  }, 0)
+                }
+              }
+            }
           }
         })
       }).catch(err => {
@@ -1254,8 +1303,6 @@
       while (el) {
         if (visitor(el) === 'stop') break
         if (el.nextSibling) queue.push(el.nextSibling)
-        // Skip children of code-editor elements (they're non-editable)
-        // Also skip code-editor-placeholder elements
         if (el.firstChild && !el.classList?.contains('code-editor') && !el.classList?.contains('code-editor-placeholder')) queue.push(el.firstChild)
         el = queue.pop()
       }
