@@ -111,60 +111,110 @@
     cursor: pointer;
   }
 
-  /* JavaScript syntax highlighting */
-  .js-keyword {
+  /* Code Editor syntax highlighting (extensible for all languages) */
+  .ce-keyword {
     color: #cf222e;
     @media (prefers-color-scheme: dark) {
       color: #ff7b72;
     }
   }
 
-  .js-string {
+  .ce-string {
     color: #0a3069;
     @media (prefers-color-scheme: dark) {
       color: #a5d6ff;
     }
   }
 
-  .js-number {
+  .ce-number {
     color: #0550ae;
     @media (prefers-color-scheme: dark) {
       color: #79c0ff;
     }
   }
 
-  .js-comment {
+  .ce-comment {
     color: #6e7781;
     @media (prefers-color-scheme: dark) {
       color: #8b949e;
     }
   }
 
-  .js-function {
+  .ce-function {
     color: #8250df;
     @media (prefers-color-scheme: dark) {
       color: #d2a8ff;
     }
   }
 
-  .js-operator {
+  .ce-operator {
     color: #cf222e;
     @media (prefers-color-scheme: dark) {
       color: #ff7b72;
     }
   }
 
-  .js-builtin {
+  .ce-builtin {
     color: #953800;
     @media (prefers-color-scheme: dark) {
       color: #ffa657;
     }
   }
 
-  .js-regex {
+  .ce-regex {
     color: #116329;
     @media (prefers-color-scheme: dark) {
       color: #7ee787;
+    }
+  }
+
+  .ce-tag {
+    color: #116329;
+    @media (prefers-color-scheme: dark) {
+      color: #7ee787;
+    }
+  }
+
+  .ce-selector {
+    color: #8250df;
+    @media (prefers-color-scheme: dark) {
+      color: #d2a8ff;
+    }
+  }
+
+  .ce-variable {
+    color: #953800;
+    @media (prefers-color-scheme: dark) {
+      color: #ffa657;
+    }
+  }
+
+  .ce-heading {
+    font-weight: bold;
+    color: #0550ae;
+    @media (prefers-color-scheme: dark) {
+      color: #79c0ff;
+    }
+  }
+
+  .ce-code {
+    background: rgba(175, 184, 193, 0.2);
+    padding: 2px 4px;
+    border-radius: 3px;
+  }
+
+  .ce-bold {
+    font-weight: bold;
+  }
+
+  .ce-italic {
+    font-style: italic;
+  }
+
+  .ce-link {
+    color: #0969da;
+    @media (prefers-color-scheme: dark) {
+      color: #58a6ff;
     }
   }
 
@@ -621,7 +671,6 @@
   }
 
   function getArticleContent() {
-    // Walk through article children and extract text, including raw code from code editors
     let content = ''
     const walk = (node) => {
       if (node.nodeType === Node.TEXT_NODE) {
@@ -736,279 +785,39 @@
     URL.revokeObjectURL(url)
   }
 
-  const jsKeywords = new Set([
-    'async', 'await', 'break', 'case', 'catch', 'class', 'const', 'continue',
-    'debugger', 'default', 'delete', 'do', 'else', 'export', 'extends', 'finally',
-    'for', 'function', 'if', 'import', 'in', 'instanceof', 'let', 'new', 'of',
-    'return', 'static', 'super', 'switch', 'this', 'throw', 'try', 'typeof',
-    'var', 'void', 'while', 'with', 'yield', 'true', 'false', 'null', 'undefined'
-  ])
+  let codeEditorLoaded = false
+  let codeEditorLoadPromise = null
 
-  const jsBuiltins = new Set([
-    'console', 'window', 'document', 'Array', 'Object', 'String', 'Number',
-    'Boolean', 'Function', 'Symbol', 'Map', 'Set', 'WeakMap', 'WeakSet',
-    'Promise', 'Proxy', 'Reflect', 'JSON', 'Math', 'Date', 'RegExp', 'Error',
-    'TypeError', 'SyntaxError', 'ReferenceError', 'parseInt', 'parseFloat',
-    'isNaN', 'isFinite', 'encodeURI', 'decodeURI', 'setTimeout', 'setInterval',
-    'clearTimeout', 'clearInterval', 'fetch', 'URL', 'URLSearchParams',
-    'TextEncoder', 'TextDecoder', 'Blob', 'File', 'FileReader', 'FormData',
-    'XMLHttpRequest', 'WebSocket', 'localStorage', 'sessionStorage',
-    'Uint8Array', 'Int8Array', 'Uint16Array', 'Int16Array', 'Uint32Array',
-    'Int32Array', 'Float32Array', 'Float64Array', 'ArrayBuffer', 'DataView'
-  ])
+  function loadCodeEditor() {
+    if (codeEditorLoaded) return Promise.resolve()
+    if (codeEditorLoadPromise) return codeEditorLoadPromise
 
-  const jsTokenPatterns = [
-    { type: 'comment', re: /\/\/[^\n]*/y },
-    { type: 'comment', re: /\/\*[\s\S]*?\*\//y },
-    { type: 'string', re: /"(?:[^"\\]|\\.)*"/y },
-    { type: 'string', re: /'(?:[^'\\]|\\.)*'/y },
-    { type: 'string', re: /`(?:[^`\\]|\\.)*`/y },
-    { type: 'regex', re: /\/(?![*/])(?:[^\\/\n]|\\.)+\/[gimsuy]*/y },
-    { type: 'number', re: /\b(?:0x[\da-fA-F]+|0b[01]+|0o[0-7]+|\d+\.?\d*(?:e[+-]?\d+)?)\b/y },
-    { type: 'operator', re: /[+\-*/%=<>!&|^~?:]+|\.{3}/y },
-    { type: 'word', re: /[a-zA-Z_$][\w$]*/y },
-    { type: 'punctuation', re: /[{}()\[\];,.]/y },
-    { type: 'whitespace', re: /\s+/y },
-  ]
-
-  function highlightJSCode(code) {
-    let html = ''
-    let i = 0
-    const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-
-    while (i < code.length) {
-      let matched = false
-      for (const pat of jsTokenPatterns) {
-        pat.re.lastIndex = i
-        const match = pat.re.exec(code)
-        if (match && match.index === i) {
-          const token = match[0]
-          let className = null
-
-          if (pat.type === 'comment') className = 'js-comment'
-          else if (pat.type === 'string') className = 'js-string'
-          else if (pat.type === 'number') className = 'js-number'
-          else if (pat.type === 'regex') className = 'js-regex'
-          else if (pat.type === 'operator') className = 'js-operator'
-          else if (pat.type === 'word') {
-            if (jsKeywords.has(token)) className = 'js-keyword'
-            else if (jsBuiltins.has(token)) className = 'js-builtin'
-            else if (i + token.length < code.length && code[i + token.length] === '(') className = 'js-function'
-          }
-
-          html += className ? `<span class="${className}">${escapeHtml(token)}</span>` : escapeHtml(token)
-          i += token.length
-          matched = true
-          break
-        }
+    codeEditorLoadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script')
+      script.src = 'code-editor.js'
+      script.onload = () => {
+        codeEditorLoaded = true
+        resolve()
       }
-      if (!matched) {
-        html += escapeHtml(code[i])
-        i++
-      }
-    }
-    return html
+      script.onerror = reject
+      document.head.appendChild(script)
+    })
+    return codeEditorLoadPromise
   }
 
-  function createCodeEditor(rawCode) {
-    // Extract the code body from the fenced block
-    const firstNewline = rawCode.indexOf('\n')
-    const codeBody = rawCode.slice(firstNewline + 1, -4).trim() // Remove fence and closing ```
+  function hasCodeBlocks(content) {
+    return /```\w*\n[\s\S]*?\n```/.test(content)
+  }
 
-    const container = document.createElement('div')
-    container.className = 'code-editor'
-    container.contentEditable = 'false'
-
-    // Store raw markdown for saving
-    container.dataset.raw = rawCode
-
-    // Header with language label and action buttons
-    const header = document.createElement('div')
-    header.className = 'code-editor-header'
-
-    const langLabel = document.createElement('span')
-    langLabel.className = 'code-editor-lang'
-    langLabel.textContent = 'JavaScript'
-
-    const actions = document.createElement('div')
-    actions.className = 'code-editor-actions'
-
-    const copyBtn = document.createElement('button')
-    copyBtn.className = 'code-editor-btn copy'
-    copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy`
-
-    const runBtn = document.createElement('button')
-    runBtn.className = 'code-editor-btn run'
-    runBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Run`
-
-    actions.appendChild(copyBtn)
-    actions.appendChild(runBtn)
-    header.appendChild(langLabel)
-    header.appendChild(actions)
-
-    // Code body with textarea for editing
-    const body = document.createElement('div')
-    body.className = 'code-editor-body'
-
-    const textarea = document.createElement('textarea')
-    textarea.className = 'code-editor-textarea'
-    textarea.value = codeBody
-    textarea.spellcheck = false
-    textarea.autocomplete = 'off'
-    textarea.autocapitalize = 'off'
-
-    // Syntax highlighting overlay
-    const highlight = document.createElement('pre')
-    highlight.className = 'code-editor-highlight'
-    highlight.innerHTML = highlightJSCode(codeBody)
-
-    body.appendChild(highlight)
-    body.appendChild(textarea)
-
-    // Output area
-    const output = document.createElement('div')
-    output.className = 'code-editor-output'
-    output.style.display = 'none'
-
-    const outputHeader = document.createElement('div')
-    outputHeader.className = 'code-editor-output-header'
-
-    const outputLabel = document.createElement('span')
-    outputLabel.textContent = 'Output'
-
-    const clearBtn = document.createElement('button')
-    clearBtn.className = 'code-editor-output-clear'
-    clearBtn.textContent = 'Clear'
-
-    outputHeader.appendChild(outputLabel)
-    outputHeader.appendChild(clearBtn)
-
-    const outputContent = document.createElement('div')
-    outputContent.className = 'code-editor-output-content'
-
-    output.appendChild(outputHeader)
-    output.appendChild(outputContent)
-
-    container.appendChild(header)
-    container.appendChild(body)
-    container.appendChild(output)
-
-    // Calculate initial height based on content lines to prevent flicker
-    const lineCount = codeBody.split('\n').length
-    const lineHeight = 21 // 14px font * 1.5 line-height
-    const padding = 24 // 12px top + 12px bottom
-    const initialHeight = Math.max(80, lineCount * lineHeight + padding)
-    textarea.style.height = initialHeight + 'px'
-
-    // Auto-resize textarea and sync highlight
-    const autoResize = () => {
-      textarea.style.height = 'auto'
-      textarea.style.height = textarea.scrollHeight + 'px'
-    }
-    const updateHighlight = () => {
-      highlight.innerHTML = highlightJSCode(textarea.value)
-    }
-    textarea.addEventListener('input', () => {
-      autoResize()
-      updateHighlight()
-    })
-    textarea.addEventListener('scroll', () => {
-      highlight.scrollTop = textarea.scrollTop
-      highlight.scrollLeft = textarea.scrollLeft
-    })
-
-    // Update raw data when code changes (for saving)
-    const debouncedSave = debounce(500, save)
-    textarea.addEventListener('input', () => {
-      const lang = rawCode.match(/^```(\w*)/)?.[1] || 'js'
-      container.dataset.raw = '```' + lang + '\n' + textarea.value + '\n```'
-      // Trigger save directly (input is stopped from bubbling)
-      debouncedSave()
-    })
-
-    // Copy button
-    copyBtn.addEventListener('click', async (e) => {
-      e.stopPropagation()
-      try {
-        await navigator.clipboard.writeText(textarea.value)
-        copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Copied!`
-        setTimeout(() => {
-          copyBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy`
-        }, 2000)
-      } catch (err) {
-        console.error('Failed to copy:', err)
-      }
-    })
-
-    // Run button
-    runBtn.addEventListener('click', (e) => {
-      e.stopPropagation()
-      output.style.display = 'block'
-      outputContent.innerHTML = ''
-
-      // Create a custom console to capture output
-      const logs = []
-      const customConsole = {
-        log: (...args) => logs.push({ type: 'log', args }),
-        error: (...args) => logs.push({ type: 'error', args }),
-        warn: (...args) => logs.push({ type: 'warn', args }),
-        info: (...args) => logs.push({ type: 'info', args }),
-        clear: () => { logs.length = 0 },
-      }
-
-      try {
-        // Create a function with custom console in scope
-        const fn = new Function('console', textarea.value)
-        fn(customConsole)
-
-        // Render logs
-        logs.forEach(({ type, args }) => {
-          const line = document.createElement('div')
-          line.className = type
-          line.textContent = args.map(arg => {
-            if (typeof arg === 'object') {
-              try { return JSON.stringify(arg, null, 2) }
-              catch { return String(arg) }
-            }
-            return String(arg)
-          }).join(' ')
-          outputContent.appendChild(line)
-        })
-
-        if (logs.length === 0) {
-          const line = document.createElement('div')
-          line.className = 'info'
-          line.textContent = '✓ Code executed successfully (no output)'
-          outputContent.appendChild(line)
-        }
-      } catch (err) {
-        const line = document.createElement('div')
-        line.className = 'error'
-        line.textContent = err.toString()
-        outputContent.appendChild(line)
-      }
-    })
-
-    // Clear button
-    clearBtn.addEventListener('click', (e) => {
-      e.stopPropagation()
-      output.style.display = 'none'
-      outputContent.innerHTML = ''
-    })
-
-    // Prevent editor from handling clicks inside code editor
-    container.addEventListener('click', e => e.stopPropagation())
-    container.addEventListener('mousedown', e => e.stopPropagation())
-    container.addEventListener('keydown', e => e.stopPropagation())
-    container.addEventListener('keyup', e => e.stopPropagation())
-    container.addEventListener('input', e => e.stopPropagation())
-
-    return container
+  async function createCodeEditor(rawCode) {
+    await loadCodeEditor()
+    return window.CodeEditor.create(rawCode, save)
   }
 
   function parseMarkdown() {
     const input = getArticleContent()
     const frag = document.createDocumentFragment()
+    const codeBlockPlaceholders = [] // Track code blocks for async loading
 
     const matchers = [
       {name: 'md-codeblock', re: /```[^\n]*\n[\s\S]*?\n```/y},
@@ -1046,8 +855,13 @@
             a.target = '_blank'
             a.rel = 'noopener noreferrer'
             frag.appendChild(a)
-          } else if (m.name === 'md-codeblock' && /^```(js|javascript)/i.test(raw)) {
-            frag.appendChild(createCodeEditor(raw))
+          } else if (m.name === 'md-codeblock' && /^```\w+/i.test(raw)) {
+            const placeholder = document.createElement('div')
+            placeholder.className = 'code-editor-placeholder'
+            placeholder.dataset.raw = raw
+            placeholder.style.cssText = 'min-height: 80px; background: #f6f8fa; border-radius: 8px; margin: 12px 0;'
+            frag.appendChild(placeholder)
+            codeBlockPlaceholders.push({ placeholder, raw })
           } else {
             const span = document.createElement('span')
             span.className = m.name
@@ -1082,10 +896,30 @@
     article.appendChild(frag)
     article.normalize()
 
-    // Ensure there's a text node after any code editor at the end so user can type after it
     const lastChild = article.lastChild
-    if (lastChild?.classList?.contains('code-editor')) {
+    if (lastChild?.classList?.contains('code-editor-placeholder') || lastChild?.classList?.contains('code-editor')) {
       article.appendChild(document.createTextNode('\n'))
+    }
+
+    if (codeBlockPlaceholders.length > 0) {
+      loadCodeEditor().then(() => {
+        codeBlockPlaceholders.forEach(({ placeholder, raw }) => {
+          if (placeholder.parentNode) {
+            const editor = window.CodeEditor.create(raw, save)
+            placeholder.parentNode.replaceChild(editor, placeholder)
+          }
+        })
+      }).catch(err => {
+        console.error('Failed to load code editor:', err)
+        codeBlockPlaceholders.forEach(({ placeholder, raw }) => {
+          if (placeholder.parentNode) {
+            const span = document.createElement('span')
+            span.className = 'md-codeblock'
+            span.textContent = raw
+            placeholder.parentNode.replaceChild(span, placeholder)
+          }
+        })
+      })
     }
   }
 
@@ -1274,6 +1108,11 @@
           if (pos.dir !== '->') pos.start += el.nodeValue.length
           if (pos.dir !== '<-') pos.end += el.nodeValue.length
         }
+        if (el.classList?.contains('code-editor') || el.classList?.contains('code-editor-placeholder')) {
+          const rawLen = (el.dataset.raw || '').length
+          if (pos.dir !== '->') pos.start += rawLen
+          if (pos.dir !== '<-') pos.end += rawLen
+        }
       })
 
       element.normalize()
@@ -1298,15 +1137,21 @@
       let current = 0
 
       visit(element, el => {
+        if (el.classList?.contains('code-editor') || el.classList?.contains('code-editor-placeholder')) {
+          const len = (el.dataset.raw || '').length
+          current += len
+          return
+        }
+
         if (el.nodeType !== Node.TEXT_NODE) return
 
         const len = (el.nodeValue || '').length
-        if (current + len > pos.start) {
+        if (current + len >= pos.start) {
           if (!startNode) {
             startNode = el
             startOffset = pos.start - current
           }
-          if (current + len > pos.end) {
+          if (current + len >= pos.end) {
             endNode = el
             endOffset = pos.end - current
             return 'stop'
@@ -1332,14 +1177,14 @@
         const startEl = uneditable(startNode)
         if (startEl) {
           const node = document.createTextNode('')
-          startEl.parentNode?.insertBefore(node, startEl)
+          startEl.parentNode?.insertBefore(node, startEl.nextSibling)
           startNode = node
           startOffset = 0
         }
         const endEl = uneditable(endNode)
         if (endEl) {
           const node = document.createTextNode('')
-          endEl.parentNode?.insertBefore(node, endEl)
+          endEl.parentNode?.insertBefore(node, endEl.nextSibling)
           endNode = node
           endOffset = 0
         }
@@ -1410,7 +1255,8 @@
         if (visitor(el) === 'stop') break
         if (el.nextSibling) queue.push(el.nextSibling)
         // Skip children of code-editor elements (they're non-editable)
-        if (el.firstChild && !el.classList?.contains('code-editor')) queue.push(el.firstChild)
+        // Also skip code-editor-placeholder elements
+        if (el.firstChild && !el.classList?.contains('code-editor') && !el.classList?.contains('code-editor-placeholder')) queue.push(el.firstChild)
         el = queue.pop()
       }
     }
