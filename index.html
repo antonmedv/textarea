@@ -983,7 +983,6 @@
               const relativePos = cursorPos - startPos
               
               if (relativePos > codeStart && relativePos < raw.length) {
-                // Cursor is in the code body area
                 const textarea = editor.querySelector('.code-editor-textarea')
                 if (textarea) {
                   const codeBody = raw.slice(codeStart, codeEnd).trim()

@@ -236,7 +236,6 @@ const languages = {
   }
 }
 
-// Get language config by alias
 function getLanguageConfig(alias) {
   if (!alias) return null
   const lower = alias.toLowerCase()
@@ -286,7 +285,6 @@ function highlightCode(code, langAlias) {
         const token = match[0]
         let className = null
 
-        // Map token types to CSS classes
         switch (pat.type) {
           case 'comment':
             className = 'ce-comment'
@@ -355,9 +353,7 @@ function highlightCode(code, langAlias) {
   return html
 }
 
-// Strip TypeScript type annotations for execution (basic)
 function stripTypeAnnotations(code) {
-  // This is a simplified approach - strips common type patterns
   return code
     .replace(/:\s*[A-Za-z<>[\]|&,\s]+(?=[,)\]=;])/g, '') // Type annotations
     .replace(/\bas\s+[A-Za-z<>[\]|&]+/g, '') // Type assertions
@@ -415,9 +411,7 @@ function executeCode(code, langAlias, outputContent) {
   }
 }
 
-// Create code editor element
 function createCodeEditor(rawCode, saveCallback) {
-  // Extract language and code body from the fenced block
   const langMatch = rawCode.match(/^```(\w*)/)
   const langAlias = langMatch?.[1] || ''
   const firstNewline = rawCode.indexOf('\n')
@@ -460,7 +454,6 @@ function createCodeEditor(rawCode, saveCallback) {
     langSelect.appendChild(option)
   }
   
-  // If no language matched, select Plain Text
   if (!langConfig) {
     plainOption.selected = true
   }
@@ -641,7 +634,6 @@ function createCodeEditor(rawCode, saveCallback) {
     highlight.scrollLeft = textarea.scrollLeft
   })
 
-  // Debounce helper
   const debounce = (ms, fn) => {
     let timer
     return (...args) => {
