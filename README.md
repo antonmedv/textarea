@@ -29,7 +29,7 @@ A _minimalist_ text editor that lives entirely in your browser and stores everyt
 
 ## Related
 
-- [Number](https://numbr.dev) – my another website, same as textarea, only support calculations like `1 USD in EUR =`.
+- [Numbr](https://numbr.dev) – my another website, same as textarea, only support calculations like `1 USD in EUR =`.
 
 ---
 
