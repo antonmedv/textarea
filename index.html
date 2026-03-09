@@ -261,11 +261,140 @@
       visibility: hidden !important;
     }
   }
+
+  #password-dialog {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(5px);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #password-dialog.visible {
+    display: flex;
+  }
+
+  #password-dialog .dialog-content {
+    background: var(--elevated);
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 400px;
+    width: 90%;
+  }
+
+  #password-dialog h2 {
+    margin: 0 0 10px 0;
+    font-size: 24px;
+    font-weight: 600;
+  }
+
+  #password-dialog p {
+    margin: 0 0 20px 0;
+    color: #666;
+    line-height: 1.5;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #password-dialog p {
+      color: #999;
+    }
+  }
+
+  #password-dialog input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 16px;
+    margin-bottom: 15px;
+    font-family: system-ui;
+    background: var(--elevated);
+    color: var(--text);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #password-dialog input {
+      border-color: #444;
+    }
+  }
+
+  #password-dialog input:focus {
+    outline: 2px solid var(--outline);
+    border-color: transparent;
+  }
+
+  #password-dialog .buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+
+  #password-dialog button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: system-ui;
+  }
+
+  #password-dialog button.primary {
+    background: #0569fa;
+    color: white;
+  }
+
+  #password-dialog button.primary:hover {
+    background: #3c86f3;
+  }
+
+  #password-dialog button.secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid #ddd;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #password-dialog button.secondary {
+      border-color: #444;
+    }
+  }
+
+  #password-dialog button.secondary:hover {
+    background: rgba(0, 0, 0, 0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    #password-dialog button.secondary:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+  }
+
+  #password-dialog .checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 15px;
+  }
+
+  #password-dialog .error {
+    color: #d32f2f;
+    font-size: 14px;
+    margin-top: -10px;
+    margin-bottom: 10px;
+  }
 </style>
 <article contenteditable="plaintext-only" spellcheck autofocus></article>
 <button id="button" class="noprint">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-       stroke="currentColor"
+    stroke="currentColor"
        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="1"></circle>
     <circle cx="12" cy="5" r="1"></circle>
@@ -291,6 +420,12 @@
     </svg>
     Share document
   </a>
+  <a class="item" id="toggle-encryption" href="" role="menuitem">
+    <svg aria-hidden="true" focusable="false" width="22" height="22">
+      <use xlink:href="#icon-lock"></use>
+    </svg>
+    <span id="encryption-status">Enable encryption</span>
+  </a>
   <a class="item" id="save-as-html" href="" role="menuitem">
     <svg aria-hidden="true" focusable="false" width="22" height="22">
       <use xlink:href="#icon-empty"></use>
@@ -311,9 +446,29 @@
   </a>
 </div>
 <div id="notification" class="noprint"></div>
+<div id="password-dialog" class="noprint">
+  <div class="dialog-content">
+    <h2 id="dialog-title">Password Required</h2>
+    <p id="dialog-description">
+      This document is encrypted. Enter the password to decrypt it.
+    </p>
+    <div
+      class="checkbox-container"
+      id="encryption-toggle-container"
+      style="display: none"
+    >
+      <input type="checkbox" id="enable-encryption" />
+      <label for="enable-encryption">Enable encryption for this document</label>
+    </div>
+    <input type="password" id="password-input" placeholder="Enter password" />
+    <div class="error" id="password-error" style="display: none"></div>
+    <div class="buttons">
+      <button class="secondary" id="password-cancel">Cancel</button>
+      <button class="primary" id="password-submit">OK</button>
+    </div>
+  </div>
+</div>
 <script>
-  initUI()
-
   const article = document.querySelector('article')
   const editor = new Editor(article, parseMarkdown)
   article.addEventListener('input', debounce(500, save))
@@ -335,6 +490,185 @@
   }
 
   console.log('%cGitHub https://github.com/antonmedv/textarea', 'font-size: 16px; border: 1px solid lightblue; border-radius: 12px; padding: 10px 14px; ')
+
+  // State of the encryption
+  let encryptionPassword = null
+  let isEncrypted = false
+
+  // Sposta qui la funzione updateEncryptionStatus
+  function updateEncryptionStatus() {
+    const encryptionStatus = document.querySelector('#encryption-status')
+    if (encryptionStatus) {
+      if (isEncrypted) {
+        encryptionStatus.textContent = 'Disable encryption'
+      } else {
+        encryptionStatus.textContent = 'Enable encryption'
+      }
+    }
+  }
+
+  // Functions for encryption/decryption
+  async function deriveKey(password, salt) {
+    const encoder = new TextEncoder()
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(password),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveBits', 'deriveKey'],
+    )
+    return crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: salt,
+        iterations: 100000,
+        hash: 'SHA-256',
+      },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['encrypt', 'decrypt'],
+    )
+  }
+
+  async function encryptData(text, password) {
+    const encoder = new TextEncoder()
+    const data = encoder.encode(text)
+    const salt = crypto.getRandomValues(new Uint8Array(16))
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    const key = await deriveKey(password, salt)
+
+    const encrypted = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: iv },
+      key,
+      data,
+    )
+
+    // Combina salt + iv + encrypted data
+    const result = new Uint8Array(
+      salt.length + iv.length + encrypted.byteLength,
+    )
+    result.set(salt, 0)
+    result.set(iv, salt.length)
+    result.set(new Uint8Array(encrypted), salt.length + iv.length)
+
+    return result
+  }
+
+  async function decryptData(encryptedData, password) {
+    const salt = encryptedData.slice(0, 16)
+    const iv = encryptedData.slice(16, 28)
+    const data = encryptedData.slice(28)
+
+    const key = await deriveKey(password, salt)
+
+    try {
+      const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: iv },
+        key,
+        data,
+      )
+      return new TextDecoder().decode(decrypted)
+    } catch (e) {
+      throw new Error('Wrong password or corrupted data')
+    }
+  }
+
+  function showPasswordDialog(mode = 'decrypt', callback) {
+    console.log('showPasswordDialog called with mode:', mode)
+    const dialog = document.getElementById('password-dialog')
+    const title = document.getElementById('dialog-title')
+    const description = document.getElementById('dialog-description')
+    const input = document.getElementById('password-input')
+    const error = document.getElementById('password-error')
+    const submit = document.getElementById('password-submit')
+    const cancel = document.getElementById('password-cancel')
+    const encryptionToggle = document.getElementById(
+      'encryption-toggle-container',
+    )
+    const enableEncryption = document.getElementById('enable-encryption')
+
+    console.log('Dialog element:', dialog)
+    console.log('Dialog element exists:', !!dialog)
+
+    if (!dialog) {
+      console.error('Password dialog element not found!')
+      return
+    }
+
+    input.value = ''
+    error.style.display = 'none'
+
+    if (mode === 'decrypt') {
+      title.textContent = 'Password Required'
+      description.textContent =
+        'This document is encrypted. Enter the password to decrypt it.'
+      encryptionToggle.style.display = 'none'
+    } else if (mode === 'set') {
+      title.textContent = 'Set Password'
+      description.textContent =
+        'Enter a password to encrypt this document. Anyone with the link will need this password to view the content.'
+      encryptionToggle.style.display = 'none'
+    } else if (mode === 'ask') {
+      title.textContent = 'Document Encryption'
+      description.textContent =
+        'Do you want to encrypt this document with a password?'
+      encryptionToggle.style.display = 'flex'
+      enableEncryption.checked = false
+    }
+
+    const cleanup = () => {
+      submit.onclick = null
+      cancel.onclick = null
+      input.onkeypress = null
+    }
+
+    const handleSubmit = async () => {
+      if (mode === 'ask' && !enableEncryption.checked) {
+        cleanup()
+        dialog.classList.remove('visible')
+        callback(null)
+        return
+      }
+
+      const password = input.value
+      if (!password || password.trim() === '') {
+        error.textContent = 'Password is required'
+        error.style.display = 'block'
+        return
+      }
+
+      cleanup()
+      dialog.classList.remove('visible')
+      callback(password)
+    }
+
+    const handleCancel = () => {
+      cleanup()
+      dialog.classList.remove('visible')
+      callback(null)
+    }
+
+    const handleKeypress = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        handleSubmit()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        handleCancel()
+      }
+    }
+
+    // Ensure previous handlers are removed
+    cleanup()
+
+    submit.onclick = handleSubmit
+    cancel.onclick = handleCancel
+    input.onkeypress = handleKeypress
+
+    dialog.classList.add('visible')
+    setTimeout(() => input.focus(), 100)
+  }
 
   async function load() {
     try {
@@ -362,15 +696,113 @@
 
   async function set(hash) {
     if (!hash) return
-    const [content, style] = (await decompress(hash.slice(1))).split('\x00')
-    editor.set(content)
-    if (style) article.setAttribute('style', style)
+
+    try {
+      let decompressed = await decompress(hash.slice(1))
+
+      console.log(
+        'Decompressed data starts with:',
+        decompressed.substring(0, 10)
+      )
+
+      // Check if the data is encrypted (starts with 'ENC:')
+      if (decompressed.startsWith('ENC:')) {
+        console.log('Encrypted document detected, showing password dialog')
+        const encryptedB64 = decompressed.slice(4)
+        const encryptedData = Uint8Array.fromBase64(encryptedB64, {
+          alphabet: 'base64url',
+        })
+
+        // Ask for the password
+        const tryDecrypt = async () => {
+          return new Promise((resolve) => {
+            showPasswordDialog('decrypt', async (password) => {
+              if (!password) {
+                article.textContent = ''
+                resolve()
+                return
+              }
+
+              try {
+                decompressed = await decryptData(encryptedData, password)
+                isEncrypted = true
+                encryptionPassword = password
+
+                const [content, style] = decompressed.split('\x00')
+                const sanitizedContent = content || ''
+                editor.set(sanitizedContent)
+
+                if (style) {
+                  const sanitizedStyle = style.replace(/[<>"']/g, '')
+                  if (!sanitizedStyle.match(/url\(|javascript:/i)) {
+                    article.setAttribute('style', sanitizedStyle)
+                  }
+                }
+
+                // Update UI to reflect encrypted state
+                updateEncryptionStatus()
+
+                await save()
+
+                resolve()
+              } catch (e) {
+                // Wrong password, show error and retry
+                console.error('Wrong password, retrying...', e)
+                setTimeout(() => {
+                  const errorEl = document.getElementById('password-error')
+                  if (errorEl) {
+                    errorEl.textContent = 'Wrong password. Try again.'
+                    errorEl.style.display = 'block'
+                  }
+                  // Recursively call to retry
+                  tryDecrypt().then(resolve)
+                }, 50)
+              }
+            })
+          })
+        }
+
+        await tryDecrypt()
+      } else {
+        console.log('Unencrypted document')
+        // Not encrypted - reset encryption state
+        isEncrypted = false
+        encryptionPassword = null
+        
+        const [content, style] = decompressed.split('\x00')
+        const sanitizedContent = content || ''
+        editor.set(sanitizedContent)
+
+        if (style) {
+          const sanitizedStyle = style.replace(/[<>"']/g, '')
+          if (!sanitizedStyle.match(/url\(|javascript:/i)) {
+            article.setAttribute('style', sanitizedStyle)
+          }
+        }
+        
+        // Update UI to reflect unencrypted state
+        updateEncryptionStatus()
+      }
+    } catch (e) {
+      console.error('Error decrypting:', e)
+      throw e
+    }
   }
 
   async function get() {
     const style = article.getAttribute('style')
     const content = article.textContent + (style !== null ? '\x00' + style : '')
-    return '#' + await compress(content)
+
+    // If it is encrypted and we have the password, encrypt
+    if (isEncrypted && encryptionPassword) {
+      const encrypted = await encryptData(content, encryptionPassword)
+      const encryptedB64 = encrypted.toBase64({ alphabet: 'base64url' })
+      const combined = 'ENC:' + encryptedB64
+      return '#' + (await compress(combined))
+    }
+
+    // Otherwise save without encryption
+    return '#' + (await compress(content))
   }
 
   function updateTitle() {
@@ -419,7 +851,7 @@
         const handle = await showSaveFilePicker({
           suggestedName: document.title + '.html',
           types: [{
-            description: 'HTML file',
+              description: 'HTML file',
             accept: {'text/html': ['.html']},
           }],
         })
@@ -450,7 +882,7 @@
         const handle = await showSaveFilePicker({
           suggestedName: document.title + '.txt',
           types: [{
-            description: 'TEXT file',
+              description: 'TEXT file',
             accept: {'text/plain': ['.txt']},
           }],
         })
@@ -554,6 +986,10 @@
     const shareLink = document.querySelector('#share-link')
     const saveAsHTML = document.querySelector('#save-as-html')
     const saveAsText = document.querySelector('#save-as-text')
+    const toggleEncryption = document.querySelector('#toggle-encryption')
+    const encryptionStatus = document.querySelector('#encryption-status')
+
+    updateEncryptionStatus()
 
     button.addEventListener('click', event => {
       if (event.clientX || event.targetTouches) ripple(event)
@@ -600,6 +1036,38 @@
       event.preventDefault()
       downloadTXT()
       hideMenu()
+    })
+    toggleEncryption.addEventListener('click', (event) => {
+      event.preventDefault()
+      hideMenu()
+
+      if (isEncrypted) {
+        // Disable encryption
+        if (
+          confirm(
+            'Are you sure you want to disable encryption? The document will be saved unencrypted.',
+          )
+        ) {
+          isEncrypted = false
+          encryptionPassword = null
+          updateEncryptionStatus()
+          // Force immediate save to regenerate hash without encryption
+          save().then(() => {
+            notify('Encryption disabled')
+          })
+        }
+      } else {
+        // Enable encryption
+        showPasswordDialog('set', async (password) => {
+          if (password) {
+            isEncrypted = true
+            encryptionPassword = password
+            updateEncryptionStatus()
+            await save()
+            notify('Encryption enabled')
+          }
+        })
+      }
     })
   }
 
@@ -894,6 +1362,8 @@
       },
     }
   }
+
+  initUI()
 </script>
 <svg style="display: none" aria-hidden="true" focusable="false">
   <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -904,7 +1374,7 @@
     <path d="M5 12l14 0"/>
   </symbol>
   <symbol id="icon-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"
-          stroke-linecap="round"
+    stroke-linecap="round"
           stroke-linejoin="round">
     <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
     <path d="M8 9h-1a2 2 0 0 0 -2 2v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-8a2 2 0 0 0 -2 -2h-1"/>
