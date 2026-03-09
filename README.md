@@ -8,16 +8,6 @@ A _minimalist_ text editor that lives entirely in your browser and stores everyt
   </a>
 </p>
 
-<hr>
-<p>
-  <a href="https://crow.watch"><img align="left" src="https://crow.watch/static/logo-rounded.png" alt="Crow Watch" width="140" height="140"></a>
-  <h3>Crow Watch</h3>
-  A computing-focused community.
-</p>
-<p>Join at <strong><a href="https://crow.watch/join/textarea">crow.watch/join/textarea</a></strong></p>
-<p>Share great links, cool code, and new tools.</p>
-<hr>
-
 ## Features
 
 - 🗜️ **Compression** – Your text gets compressed with deflate
@@ -44,3 +34,9 @@ A _minimalist_ text editor that lives entirely in your browser and stores everyt
 ---
 
 *Made with ❤️ and JavaScript*
+
+<p align="center">
+  <a href="https://crow.watch/join/textarea">
+    <img src="https://github.com/user-attachments/assets/37c84073-6533-4746-951d-d879f90a7fd2" alt="Join Crow Watch" width="900" hight="600">  
+  </a>
+</p>
