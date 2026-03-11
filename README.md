@@ -30,6 +30,7 @@ A _minimalist_ text editor that lives entirely in your browser and stores everyt
 ## Related
 
 - [numbr.dev](https://numbr.dev) – my another website, same as textarea, only support calculations like `1 USD in EUR =`.
+- [textarea.my fork](https://github.com/hk151109/textarea) – A fork by [Harikrishnan Gopal](https://github.com/hk151109) with a **Sidebar**, **Document History**, and **short.io integration** for managing url of large documents.
 
 ---
 
