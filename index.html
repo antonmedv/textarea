@@ -256,6 +256,79 @@
     visibility: visible;
   }
 
+  dialog {
+    border: none;
+    border-radius: 12px;
+    padding: 24px;
+    background: var(--elevated);
+    color: var(--text);
+    box-shadow: 0 19px 38px rgba(0, 0, 0, 0.15);
+    max-width: 300px;
+    width: calc(100% - 32px);
+  }
+
+  dialog::backdrop {
+    background: rgba(0, 0, 0, 0.5);
+  }
+
+  dialog form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  dialog p {
+    font: 600 16px / 1.5 system-ui;
+    margin: 0;
+  }
+
+  dialog .error {
+    color: #e53e3e;
+    font: 14px / 1.5 system-ui;
+    font-weight: normal;
+    min-height: 0;
+  }
+
+  dialog input[type="password"] {
+    font: 16px / 1.5 system-ui;
+    padding: 8px 12px;
+    border: 1px solid rgba(128, 128, 128, 0.3);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    outline: none;
+    width: 100%;
+  }
+
+  dialog input[type="password"]:focus {
+    border-color: var(--outline);
+    box-shadow: 0 0 0 1px var(--outline);
+  }
+
+  dialog .buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  dialog button {
+    font: 600 14px / 1.5 system-ui;
+    padding: 6px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+  }
+
+  dialog button[type="submit"] {
+    background: #0569fa;
+    color: #fff;
+  }
+
+  dialog button[type="button"] {
+    background: transparent;
+    color: var(--text);
+  }
+
   @media print {
     .noprint {
       visibility: hidden !important;
@@ -303,6 +376,12 @@
     </svg>
     Save as TEXT
   </a>
+  <a class="item" id="lock-item" href="" role="menuitem">
+    <svg aria-hidden="true" focusable="false" width="22" height="22">
+      <use id="lock-icon" xlink:href="#icon-lock"></use>
+    </svg>
+    <span id="lock-text">Lock document</span>
+  </a>
   <a class="item" href="https://github.com/antonmedv/textarea" target="_blank" role="menuitem">
     <svg aria-hidden="true" focusable="false" width="22" height="22">
       <use xlink:href="#icon-github"></use>
@@ -311,7 +390,21 @@
   </a>
 </div>
 <div id="notification" class="noprint"></div>
+<dialog id="password-dialog" class="noprint">
+  <form>
+    <p id="password-title">Enter password</p>
+    <input type="password" id="password-input" placeholder="Password" required>
+    <input type="password" id="password-confirm" placeholder="Confirm password">
+    <p id="password-error" class="error"></p>
+    <div class="buttons">
+      <button type="button" id="password-cancel">Cancel</button>
+      <button type="submit">OK</button>
+    </div>
+  </form>
+</dialog>
 <script>
+  let encryptionPassword = null
+
   initUI()
 
   const article = document.querySelector('article')
@@ -338,16 +431,48 @@
 
   async function load() {
     try {
-      if (location.hash !== '') await set(location.hash)
-      else {
-        await set(localStorage.getItem('hash') ?? '')
-        if (article.textContent) history.replaceState({}, '', await get())
+      let hash = location.hash
+      let fromStorage = false
+      if (!hash) {
+        hash = localStorage.getItem('hash') ?? ''
+        if (hash && !hash.startsWith('#')) hash = '#' + hash
+        fromStorage = true
+      }
+
+      if (hash.startsWith('#e0_')) {
+        let error = null
+        while (true) {
+          if (!encryptionPassword) {
+            encryptionPassword = await askPassword({error})
+            if (!encryptionPassword) {
+              article.textContent = ''
+              updateLockButton()
+              return
+            }
+          }
+          try {
+            await setEncrypted(hash.slice(4), encryptionPassword)
+            break
+          } catch (e) {
+            encryptionPassword = null
+            error = 'Wrong password'
+          }
+        }
+      } else if (hash) {
+        encryptionPassword = null
+        await set(hash)
+      }
+
+      if (fromStorage && article.textContent) {
+        history.replaceState({}, '', await get())
       }
     } catch (e) {
+      encryptionPassword = null
       article.textContent = ''
       article.removeAttribute('style')
     }
     updateTitle()
+    updateLockButton()
   }
 
   async function save() {
@@ -360,16 +485,24 @@
     updateTitle()
   }
 
-  async function set(hash) {
-    if (!hash) return
-    const [content, style] = (await decompress(hash.slice(1))).split('\x00')
+  function applyContent(decoded) {
+    const [content, style] = decoded.split('\x00')
     editor.set(content)
     if (style) article.setAttribute('style', style)
+    else article.removeAttribute('style')
+  }
+
+  async function set(hash) {
+    if (!hash) return
+    applyContent(await decompress(hash.slice(1)))
   }
 
   async function get() {
     const style = article.getAttribute('style')
     const content = article.textContent + (style !== null ? '\x00' + style : '')
+    if (encryptionPassword) {
+      return '#e0_' + await compressAndEncrypt(content, encryptionPassword)
+    }
     return '#' + await compress(content)
   }
 
@@ -378,24 +511,147 @@
     document.title = match?.[1] ?? 'Textarea'
   }
 
-  async function compress(string) {
+  async function deflate(string) {
     const byteArray = new TextEncoder().encode(string)
     const stream = new CompressionStream('deflate-raw')
     const writer = stream.writable.getWriter()
     writer.write(byteArray)
     writer.close()
-    const buffer = await new Response(stream.readable).arrayBuffer()
-    return new Uint8Array(buffer).toBase64({alphabet: 'base64url'})
+    return new Uint8Array(await new Response(stream.readable).arrayBuffer())
   }
 
-  async function decompress(b64) {
-    const byteArray = Uint8Array.fromBase64(b64, {alphabet: 'base64url'})
+  async function inflate(bytes) {
     const stream = new DecompressionStream('deflate-raw')
     const writer = stream.writable.getWriter()
-    writer.write(byteArray)
+    writer.write(bytes)
     writer.close()
     const buffer = await new Response(stream.readable).arrayBuffer()
     return new TextDecoder().decode(buffer)
+  }
+
+  async function compress(string) {
+    return (await deflate(string)).toBase64({alphabet: 'base64url'})
+  }
+
+  async function decompress(b64) {
+    return inflate(Uint8Array.fromBase64(b64, {alphabet: 'base64url'}))
+  }
+
+  async function deriveKey(password, salt) {
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(password),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    )
+    return crypto.subtle.deriveKey(
+      {name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256'},
+      keyMaterial,
+      {name: 'AES-GCM', length: 256},
+      false,
+      ['encrypt', 'decrypt']
+    )
+  }
+
+  let cachedKey = null
+  let cachedSalt = null
+
+  async function encryptData(data, password) {
+    if (!cachedKey) {
+      cachedSalt = crypto.getRandomValues(new Uint8Array(16))
+      cachedKey = await deriveKey(password, cachedSalt)
+    }
+    const iv = crypto.getRandomValues(new Uint8Array(12))
+    const encrypted = await crypto.subtle.encrypt({name: 'AES-GCM', iv}, cachedKey, data)
+    const result = new Uint8Array(cachedSalt.length + iv.length + encrypted.byteLength)
+    result.set(cachedSalt)
+    result.set(iv, cachedSalt.length)
+    result.set(new Uint8Array(encrypted), cachedSalt.length + iv.length)
+    return result
+  }
+
+  async function decryptData(data, password) {
+    const salt = data.slice(0, 16)
+    const iv = data.slice(16, 28)
+    const encrypted = data.slice(28)
+    const key = await deriveKey(password, salt)
+    return crypto.subtle.decrypt({name: 'AES-GCM', iv}, key, encrypted)
+  }
+
+  async function compressAndEncrypt(string, password) {
+    const compressed = await deflate(string)
+    const encrypted = await encryptData(compressed, password)
+    return encrypted.toBase64({alphabet: 'base64url'})
+  }
+
+  async function decryptAndDecompress(b64, password) {
+    const encrypted = Uint8Array.fromBase64(b64, {alphabet: 'base64url'})
+    const compressed = new Uint8Array(await decryptData(encrypted, password))
+    return inflate(compressed)
+  }
+
+  async function setEncrypted(b64, password) {
+    applyContent(await decryptAndDecompress(b64, password))
+  }
+
+  function askPassword({title, showConfirm, error} = {}) {
+    return new Promise(resolve => {
+      const dialog = document.getElementById('password-dialog')
+      const form = dialog.querySelector('form')
+      const input = document.getElementById('password-input')
+      const confirmInput = document.getElementById('password-confirm')
+      const errorEl = document.getElementById('password-error')
+      const titleEl = document.getElementById('password-title')
+      const cancelBtn = document.getElementById('password-cancel')
+
+      titleEl.textContent = title || 'Enter password'
+      input.value = ''
+      confirmInput.value = ''
+      errorEl.textContent = error || ''
+      confirmInput.style.display = showConfirm ? '' : 'none'
+      confirmInput.required = !!showConfirm
+
+      let done = false
+      const finish = (value) => {
+        if (done) return
+        done = true
+        form.onsubmit = null
+        cancelBtn.onclick = null
+        dialog.onclose = null
+        dialog.close()
+        resolve(value)
+      }
+
+      form.onsubmit = (e) => {
+        e.preventDefault()
+        if (showConfirm && input.value !== confirmInput.value) {
+          errorEl.textContent = 'Passwords don\'t match'
+          confirmInput.focus()
+          return
+        }
+        finish(input.value || null)
+      }
+
+      cancelBtn.onclick = () => finish(null)
+      dialog.onclose = () => finish(null)
+
+      dialog.showModal()
+      input.focus()
+    })
+  }
+
+  function updateLockButton() {
+    const lockIcon = document.getElementById('lock-icon')
+    const lockText = document.getElementById('lock-text')
+    if (!lockIcon) return
+    if (encryptionPassword) {
+      lockIcon.setAttribute('xlink:href', '#icon-unlock')
+      lockText.textContent = 'Unlock document'
+    } else {
+      lockIcon.setAttribute('xlink:href', '#icon-lock')
+      lockText.textContent = 'Lock document'
+    }
   }
 
   function debounce(ms, fn) {
@@ -600,6 +856,28 @@
       event.preventDefault()
       downloadTXT()
       hideMenu()
+    })
+
+    const lockItem = document.getElementById('lock-item')
+    lockItem.addEventListener('click', async event => {
+      event.preventDefault()
+      hideMenu()
+      if (encryptionPassword) {
+        encryptionPassword = null
+        cachedKey = null
+        cachedSalt = null
+        await save()
+        notify('Document unlocked')
+      } else {
+        const password = await askPassword({title: 'Set password', showConfirm: true})
+        if (!password) return
+        encryptionPassword = password
+        cachedKey = null
+        cachedSalt = null
+        await save()
+        notify('Document locked')
+      }
+      updateLockButton()
     })
   }
 
@@ -932,6 +1210,20 @@
     <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
     <path
       d="M9 19c-4.3 1.4 -4.3 -2.5 -6 -3m12 5v-3.5c0 -1 .1 -1.4 -.5 -2c2.8 -.3 5.5 -1.4 5.5 -6a4.6 4.6 0 0 0 -1.3 -3.2a4.2 4.2 0 0 0 -.1 -3.2s-1.1 -.3 -3.5 1.3a12.3 12.3 0 0 0 -6.2 0c-2.4 -1.6 -3.5 -1.3 -3.5 -1.3a4.2 4.2 0 0 0 -.1 3.2a4.6 4.6 0 0 0 -1.3 3.2c0 4.6 2.7 5.7 5.5 6c-.6 .6 -.6 1.2 -.5 2v3.5"/>
+  </symbol>
+  <symbol id="icon-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+    <path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6z"/>
+    <path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0"/>
+    <path d="M8 11v-4a4 4 0 0 1 8 0v4"/>
+  </symbol>
+  <symbol id="icon-unlock" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+    <path d="M5 13a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-6z"/>
+    <path d="M11 16a1 1 0 1 0 2 0a1 1 0 0 0 -2 0"/>
+    <path d="M8 11v-3a4 4 0 0 1 8 0"/>
   </symbol>
   <symbol id="icon-empty" viewBox="0 0 24 24"></symbol>
 </svg>
