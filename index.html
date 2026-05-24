@@ -4,6 +4,8 @@
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.js"></script>
 <title>Textarea</title>
 <style>
   * {
@@ -261,8 +263,65 @@
       visibility: hidden !important;
     }
   }
+
+  /* ── Images ── */
+  .img-wrap {
+    display: inline-block;
+    vertical-align: bottom;
+    font-size: 0;
+    line-height: 0;
+    color: transparent;
+    max-width: 100%;
+  }
+  .img-wrap img {
+    display: block;
+    max-width: 100%;
+    max-height: 80vh;
+    border-radius: 4px;
+    cursor: default;
+  }
+
+  /* ── Math (KaTeX) ── */
+  .math-wrap {
+    font-size: 0;
+    line-height: 0;
+    color: transparent;
+  }
+  .math-wrap.math-display {
+    display: block;
+    text-align: center;
+    margin: 0.5em 0;
+    overflow-x: auto;
+  }
+  .math-wrap .math-rendered {
+    font-size: initial;
+    line-height: initial;
+    color: initial;
+  }
+
+  /* ── Markdown extras ── */
+  .md-hr {
+    display: block;
+    border: 0;
+    border-top: 1px solid currentColor;
+    opacity: 0.25;
+    font-size: 0;
+    line-height: 0;
+    overflow: hidden;
+    margin: 2px 0;
+  }
+  .md-blockquote {
+    display: block;
+    border-left: 3px solid currentColor;
+    opacity: 0.7;
+    padding-left: 0.75em;
+  }
+  .md-list-item {
+    display: block;
+    padding-left: 1.5em;
+  }
 </style>
-<article contenteditable="plaintext-only" spellcheck autofocus></article>
+<article contenteditable spellcheck autofocus></article>
 <button id="button" class="noprint">
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
        stroke="currentColor"
@@ -312,10 +371,103 @@
 </div>
 <div id="notification" class="noprint"></div>
 <script>
+  // ── PUA char ranges for images and math ──────────────────────────────────
+  const IMAGE_BASE        = 0xE000  // U+E000–E0FF  images
+  const MATH_DISPLAY_BASE = 0xE100  // U+E100–E1FF  display math $$...$$
+  const MATH_INLINE_BASE  = 0xE200  // U+E200–E2FF  inline math $...$
+
+  const imageStore = new Map()  // codepoint → dataUrl
+  const mathStore  = new Map()  // codepoint → formula string
+
+  function allocPUA(base, store) {
+    let cp = base
+    while (store.has(cp)) cp++
+    return cp
+  }
+
+  // Extracts text from element, SKIPPING .math-rendered subtrees
+  // so KaTeX HTML doesn't pollute the editor text.
+  function getEditorText(element) {
+    let result = ''
+    const walker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
+      {
+        acceptNode(node) {
+          if (node.nodeType === Node.ELEMENT_NODE &&
+              node.classList.contains('math-rendered')) {
+            return NodeFilter.FILTER_REJECT  // skip entire subtree
+          }
+          return NodeFilter.FILTER_ACCEPT
+        }
+      }
+    )
+    let node
+    while ((node = walker.nextNode())) {
+      if (node.nodeType === Node.TEXT_NODE) result += node.nodeValue
+    }
+    return result
+  }
+
+  // Plain text for export: expands PUA chars back to readable text
+  function getPlainText() {
+    return [...getEditorText(article)].map(ch => {
+      const cp = ch.codePointAt(0)
+      if (mathStore.has(cp)) {
+        const f = mathStore.get(cp)
+        return cp < MATH_INLINE_BASE ? `$$${f}$$` : `$${f}$`
+      }
+      if (imageStore.has(cp)) return '[image]'
+      return ch
+    }).join('')
+  }
+
   initUI()
 
   const article = document.querySelector('article')
   const editor = new Editor(article, parseMarkdown)
+
+  // ── Paste handler: images + math + plain text ────────────────────────────
+  article.addEventListener('paste', async (event) => {
+    const items = [...(event.clipboardData?.items ?? [])]
+    const imageItem = items.find(it => it.type.startsWith('image/'))
+
+    if (imageItem) {
+      event.preventDefault()
+      const blob = imageItem.getAsFile()
+      const dataUrl = await new Promise((res, rej) => {
+        const r = new FileReader()
+        r.onload = e => res(e.target.result)
+        r.onerror = rej
+        r.readAsDataURL(blob)
+      })
+      const cp = allocPUA(IMAGE_BASE, imageStore)
+      imageStore.set(cp, dataUrl)
+      document.execCommand('insertText', false, String.fromCodePoint(cp))
+      return
+    }
+
+    // Force plain text for all other pastes (we switched from plaintext-only)
+    event.preventDefault()
+    let text = event.clipboardData?.getData('text/plain') ?? ''
+    if (!text) return
+
+    // Extract display math $$...$$ → PUA E1xx
+    text = text.replace(/\$\$([\s\S]*?)\$\$/g, (_, formula) => {
+      const cp = allocPUA(MATH_DISPLAY_BASE, mathStore)
+      mathStore.set(cp, formula.trim())
+      return String.fromCodePoint(cp)
+    })
+    // Extract inline math $...$ → PUA E2xx
+    text = text.replace(/\$([^$\n]+)\$/g, (_, formula) => {
+      const cp = allocPUA(MATH_INLINE_BASE, mathStore)
+      mathStore.set(cp, formula.trim())
+      return String.fromCodePoint(cp)
+    })
+
+    document.execCommand('insertText', false, text)
+  })
+
   article.addEventListener('input', debounce(500, save))
   article.addEventListener('blur', save)
   article.addEventListener('click', event => {
@@ -337,6 +489,16 @@
   console.log('%cGitHub https://github.com/antonmedv/textarea', 'font-size: 16px; border: 1px solid lightblue; border-radius: 12px; padding: 10px 14px; ')
 
   async function load() {
+    // Restore image and math stores from localStorage
+    try {
+      const imgs = localStorage.getItem('images')
+      if (imgs) for (const [k, v] of Object.entries(JSON.parse(imgs))) imageStore.set(+k, v)
+    } catch(e) {}
+    try {
+      const maths = localStorage.getItem('math')
+      if (maths) for (const [k, v] of Object.entries(JSON.parse(maths))) mathStore.set(+k, v)
+    } catch(e) {}
+
     try {
       if (location.hash !== '') await set(location.hash)
       else {
@@ -369,12 +531,33 @@
 
   async function get() {
     const style = article.getAttribute('style')
-    const content = article.textContent + (style !== null ? '\x00' + style : '')
+    const text = getEditorText(article)
+    const content = text + (style !== null ? '\x00' + style : '')
+
+    // Garbage-collect PUA refs no longer in the text
+    const usedCps = new Set([...text].map(ch => ch.codePointAt(0)))
+    for (const [cp] of imageStore) { if (!usedCps.has(cp)) imageStore.delete(cp) }
+    for (const [cp] of mathStore)  { if (!usedCps.has(cp)) mathStore.delete(cp) }
+
+    // Persist stores to localStorage
+    try {
+      if (imageStore.size) {
+        const obj = {}; for (const [k, v] of imageStore) obj[k] = v
+        localStorage.setItem('images', JSON.stringify(obj))
+      } else localStorage.removeItem('images')
+    } catch(e) {}
+    try {
+      if (mathStore.size) {
+        const obj = {}; for (const [k, v] of mathStore) obj[k] = v
+        localStorage.setItem('math', JSON.stringify(obj))
+      } else localStorage.removeItem('math')
+    } catch(e) {}
+
     return '#' + await compress(content)
   }
 
   function updateTitle() {
-    const match = article.textContent.match(/^\n*#(.+)\n/)
+    const match = getEditorText(article).match(/^\n*#(.+)\n/)
     document.title = match?.[1] ?? 'Textarea'
   }
 
@@ -443,7 +626,7 @@
 
   async function downloadTXT() {
     updateTitle()
-    const text = article.textContent
+    const text = getPlainText()
 
     if ('showSaveFilePicker' in window) {
       try {
@@ -473,31 +656,87 @@
   }
 
   function parseMarkdown(element) {
-    const input = element.textContent
+    // Use getEditorText so KaTeX content in .math-rendered is excluded
+    const input = getEditorText(element)
     const frag = document.createDocumentFragment()
 
     const matchers = [
       {name: 'md-codeblock', re: /```[^\n]*\n[\s\S]*?\n```/y},
       {name: 'md-codeblock', re: /~~~[^\n]*\n[\s\S]*?\n~~~/y},
+      // Block-level extras (checked before headings / inline patterns)
+      {name: 'md-hr',         re: /^-{3,}[ \t]*$/my},
+      {name: 'md-blockquote', re: /^>[ \t]?[^\n]*/my},
+      {name: 'md-list-item',  re: /^[ \t]*[-*+][ \t]+[^\n]*/my},
+      // Headings
       {name: 'md-h1', re: /^#[ \t]+[^\n]*$/my},
       {name: 'md-h2', re: /^##[ \t]+[^\n]*$/my},
       {name: 'md-h3', re: /^###[ \t]+[^\n]*$/my},
       {name: 'md-h4', re: /^####[ \t]+[^\n]*$/my},
       {name: 'md-h5', re: /^#####[ \t]+[^\n]*$/my},
       {name: 'md-h6', re: /^######[ \t]+[^\n]*$/my},
-      {name: 'md-code', re: /`[^`\n]*`/y},
-      {name: 'md-bold', re: /\*\*[^*\n]+?\*\*/y},
-      {name: 'md-bold', re: /__[^_\n]+?__/y},
+      // Inline
+      {name: 'md-code',   re: /`[^`\n]*`/y},
+      {name: 'md-bold',   re: /\*\*[^*\n]+?\*\*/y},
+      {name: 'md-bold',   re: /__[^_\n]+?__/y},
       {name: 'md-strike', re: /~~[^~\n]+?~~/y},
       {name: 'md-italic', re: /\*[^*\n]+?\*/y},
       {name: 'md-italic', re: /_[^_\n]+?_/y},
-      {name: 'md-url', re: /https?:\/\/[^\s<>()\[\]{}"'`]+/y},
+      {name: 'md-url',    re: /https?:\/\/[^\s<>()\[\]{}"'`]+/y},
     ]
 
-    const specials = ['`', '~', '*', '#', '_', 'h']
+    // '-' for hr/lists, '>' for blockquotes (in addition to existing specials)
+    const specials = ['`', '~', '*', '#', '_', 'h', '-', '>']
+    // Pre-check if any PUA chars exist (avoids inner loop when no images/math)
+    const hasPUA = input.split('').some(ch => ch.codePointAt(0) >= IMAGE_BASE)
 
     let i = 0
     while (i < input.length) {
+      // ── Handle PUA chars (images & math) ────────────────────────────────
+      const cp = input.codePointAt(i)
+      if (cp >= IMAGE_BASE) {
+        if (cp < MATH_DISPLAY_BASE && imageStore.has(cp)) {
+          // Image
+          const wrap = document.createElement('span')
+          wrap.className = 'img-wrap'
+          wrap.contentEditable = 'false'
+          wrap.appendChild(document.createTextNode(String.fromCodePoint(cp)))
+          const img = document.createElement('img')
+          img.src = imageStore.get(cp)
+          img.draggable = false
+          wrap.appendChild(img)
+          frag.appendChild(wrap)
+        } else if (cp < MATH_INLINE_BASE + 0x100 && mathStore.has(cp)) {
+          // Math (display or inline)
+          const formula = mathStore.get(cp)
+          const isDisplay = cp < MATH_INLINE_BASE
+          const wrap = document.createElement('span')
+          wrap.className = 'math-wrap' + (isDisplay ? ' math-display' : '')
+          wrap.contentEditable = 'false'
+          // Keep PUA char as text node so getEditorText() can retrieve it
+          wrap.appendChild(document.createTextNode(String.fromCodePoint(cp)))
+          const rendered = document.createElement('span')
+          rendered.className = 'math-rendered'
+          if (window.katex) {
+            try {
+              rendered.innerHTML = katex.renderToString(formula, {
+                displayMode: isDisplay,
+                throwOnError: false,
+              })
+            } catch(e) {
+              rendered.textContent = (isDisplay ? '$$' : '$') + formula + (isDisplay ? '$$' : '$')
+            }
+          } else {
+            rendered.textContent = (isDisplay ? '$$' : '$') + formula + (isDisplay ? '$$' : '$')
+          }
+          wrap.appendChild(rendered)
+          frag.appendChild(wrap)
+        }
+        // Unknown PUA or missing store entry: silently skip
+        i++
+        continue
+      }
+
+      // ── Try markdown matchers ────────────────────────────────────────────
       let matched = false
       for (const m of matchers) {
         m.re.lastIndex = i
@@ -526,10 +765,17 @@
 
       if (matched) continue
 
+      // ── Fast-skip to next potentially interesting character ──────────────
       let next = input.length
       for (const ch of specials) {
         const idx = input.indexOf(ch, i)
         if (idx !== -1 && idx < next) next = idx
+      }
+      // Also stop before any PUA char
+      if (hasPUA) {
+        for (let j = i; j < next; j++) {
+          if (input.codePointAt(j) >= IMAGE_BASE) { next = j; break }
+        }
       }
 
       if (next === i) {
@@ -855,7 +1101,11 @@
       while (el) {
         if (visitor(el) === 'stop') break
         if (el.nextSibling) queue.push(el.nextSibling)
-        if (el.firstChild) queue.push(el.firstChild)
+        // Don't descend into .math-rendered — its text nodes are KaTeX HTML,
+        // not actual editor content, so they must not affect cursor positions.
+        const isMathRendered = el.nodeType === Node.ELEMENT_NODE
+          && el.classList.contains('math-rendered')
+        if (el.firstChild && !isMathRendered) queue.push(el.firstChild)
         el = queue.pop()
       }
     }
